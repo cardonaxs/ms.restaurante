@@ -3,40 +3,51 @@ const pedidoService = require('../services/pedido.service');
 class PedidoController {
   async crear(req, res) {
     try {
-      const clienteId = req.headers['x-user-id'] || 'CLI-TEMP-01';
-      const pedido = await pedidoService.crearPedido(req.body, clienteId);
-      res.status(201).json({ mensaje: "Pedido creado con éxito", pedido });
+      const authHeader = req.headers['authorization'];
+      const resultado = await pedidoService.crearPedido(authHeader, req.body);
+      res.status(201).json(resultado);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor' });
     }
   }
 
   async obtenerTodos(req, res) {
     try {
-      const pedidos = await pedidoService.obtenerPedidos();
+      const authHeader = req.headers['authorization'];
+      const pedidos = await pedidoService.obtenerTodos(authHeader);
       res.status(200).json(pedidos);
     } catch (error) {
-      res.status(500).json({ error: "Error al obtener los pedidos" });
+      res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor' });
     }
   }
 
   async obtenerPorId(req, res) {
     try {
-      const pedido = await pedidoService.obtenerPedidoPorId(req.params.id);
+      const authHeader = req.headers['authorization'];
+      const pedido = await pedidoService.obtenerPorId(authHeader, req.params.id);
       res.status(200).json(pedido);
     } catch (error) {
-      res.status(404).json({ error: error.message });
+      res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor' });
     }
   }
 
   async actualizarEstado(req, res) {
     try {
-      const { id } = req.params;
-      const { estado } = req.body;
-      const pedidoActualizado = await pedidoService.actualizarEstadoPedido(id, estado);
-      res.status(200).json({ mensaje: "Estado del pedido actualizado", pedido: pedidoActualizado });
+      const authHeader = req.headers['authorization'];
+      const resultado = await pedidoService.actualizarEstado(authHeader, req.params.id, req.body.estado);
+      res.status(200).json(resultado);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor' });
+    }
+  }
+
+  async cancelar(req, res) {
+    try {
+      const authHeader = req.headers['authorization'];
+      const resultado = await pedidoService.cancelar(authHeader, req.params.id);
+      res.status(200).json(resultado);
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || 'Error interno del servidor' });
     }
   }
 }

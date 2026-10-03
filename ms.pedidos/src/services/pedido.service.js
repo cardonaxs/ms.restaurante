@@ -1,46 +1,80 @@
+const jwt = require('jsonwebtoken');
 const pedidoRepository = require('../repositories/pedido.repository');
-const Pedido = require('../models/pedido.model');
+
+//  Reemplaza por la clave secreta exacta que definió tu compañera en ms.usuarios
+const JWT_SECRET = process.env.JWT_SECRET || 'clave_secreta_del_proyecto';
 
 class PedidoService {
-  async crearPedido(datosPedido, clienteId) {
-    if (!datosPedido.mesa) {
-      throw new Error("El número de mesa es obligatorio.");
-    }
-    if (!datosPedido.items || datosPedido.items.length === 0) {
-      throw new Error("El pedido debe contener al menos un ítem.");
+  // Función interna para verificar que el token recibido exista y sea legítimo
+  _validarToken(authHeader) {
+    if (!authHeader) {
+      throw { status: 401, message: 'Acceso denegado. No se proporcionó Token JWT' };
     }
 
-    // Cálculo del total de la orden
-    const total = datosPedido.items.reduce((acc, item) => {
-      return acc + (item.precio * item.cantidad);
-    }, 0);
+    const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader;
 
-    const id = "PED-" + Date.now();
-    const nuevoPedido = new Pedido(id, clienteId, datosPedido.mesa, datosPedido.items, total);
-
-    return await pedidoRepository.guardar(nuevoPedido);
+    try {
+      return jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      throw { status: 403, message: 'Token JWT inválido o expirado' };
+    }
   }
 
-  async obtenerPedidos() {
+  async crearPedido(authHeader, datos) {
+    const usuario = this._validarToken(authHeader);
+    const { cliente, items } = datos;
+
+    if (!cliente || !items || !Array.isArray(items) || items.length === 0) {
+      throw { status: 400, message: 'Faltan datos requeridos (cliente e items)' };
+    }
+
+    // Cálculo del total
+    const total = items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario), 0);
+
+    // Guardar cabecera y detalle
+    const pedidoId = await pedidoRepository.crearPedido(usuario.id, cliente, total);
+    await pedidoRepository.crearDetalles(pedidoId, items);
+
+    return { mensaje: 'Pedido creado exitosamente', pedido_id: pedidoId, total };
+  }
+
+  async obtenerTodos(authHeader) {
+    this._validarToken(authHeader);
     return await pedidoRepository.obtenerTodos();
   }
 
-  async obtenerPedidoPorId(id) {
-    const pedido = await pedidoRepository.buscarPorId(id);
-    if (!pedido) throw new Error("Pedido no encontrado.");
+  async obtenerPorId(authHeader, id) {
+    this._validarToken(authHeader);
+    const pedido = await pedidoRepository.obtenerPorId(id);
+    if (!pedido) {
+      throw { status: 404, message: 'Pedido no encontrado' };
+    }
     return pedido;
   }
 
-  async actualizarEstadoPedido(id, nuevoEstado) {
-    const estadosValidos = ['pendiente', 'en_preparacion', 'listo', 'entregado'];
-    if (!estadosValidos.includes(nuevoEstado)) {
-      throw new Error(`Estado no válido. Permitiendo únicamente: ${estadosValidos.join(', ')}`);
+  async actualizarEstado(authHeader, id, estado) {
+    this._validarToken(authHeader);
+
+    const estadosValidos = ['pendiente', 'en_preparacion', 'servido', 'cancelado'];
+    if (!estadosValidos.includes(estado)) {
+      throw { status: 400, message: 'Estado no válido' };
     }
 
-    const pedido = await pedidoRepository.buscarPorId(id);
-    if (!pedido) throw new Error("Pedido no encontrado.");
+    const actualizado = await pedidoRepository.actualizarEstado(id, estado);
+    if (!actualizado) {
+      throw { status: 404, message: 'Pedido no encontrado para actualizar' };
+    }
 
-    return await pedidoRepository.actualizarEstado(id, nuevoEstado);
+    return { mensaje: `Estado actualizado a '${estado}'` };
+  }
+
+  async cancelar(authHeader, id) {
+    this._validarToken(authHeader);
+    const eliminado = await pedidoRepository.eliminar(id);
+    if (!eliminado) {
+      throw { status: 404, message: 'Pedido no encontrado' };
+    }
+    return { mensaje: 'Pedido eliminado correctamente' };
   }
 }
 
