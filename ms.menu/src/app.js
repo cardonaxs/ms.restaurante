@@ -2,19 +2,24 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const menuController = require('./controllers/menu.controller');
+const menuRoutes = require('./routes/menu.routes');
 
 const app = express();
+const PORT = process.env.PORT || 3002;
 
 app.use(cors());
 app.use(express.json());
 
-// Rutas/Endpoints
-app.get('/api/menu', (req, res) => menuController.listar(req, res));
-app.post('/api/menu', (req, res) => menuController.crear(req, res));
+// Montamos en ambos paths para asegurar compatibilidad con el Gateway
+app.use('/api/menu', menuRoutes);
+app.use('/', menuRoutes);
 
-const PORT = process.env.PORT || 3002;
+app.use((req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada en ms.menu' });
+});
 
 app.listen(PORT, () => {
-  console.log(`Microservicio Menú corriendo en el puerto ${PORT}`);
+  console.log(`🟢 Microservicio ms.menu activo en el puerto ${PORT}`);
 });
+
+module.exports = app;
